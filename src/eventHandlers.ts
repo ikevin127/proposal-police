@@ -52,8 +52,11 @@ async function handleIssueCommentCreated(context: Context<'issue_comment.created
                     return console.log('issue_comment.created - assistantResponse is empty');
                 }
 
+                // check if assistant response is either NO_ACTION or "NO_ACTION" strings
+                // as sometimes the assistant response varies
+                const isNoAction = assistantResponse === 'NO_ACTION' || assistantResponse === '"NO_ACTION"';
                 // if assistant response is NO_ACTION or message role is 'user', do nothing
-                if (assistantResponse === 'NO_ACTION' || threadMessages.data?.[index]?.role === 'user') {
+                if (isNoAction || threadMessages.data?.[index]?.role === 'user') {
                     if (threadMessages.data?.[index]?.role === 'user')  {
                         return;
                     }
@@ -74,6 +77,9 @@ async function handleIssueCommentCreated(context: Context<'issue_comment.created
                 // replace {proposalLink} from response template with the link to the comment
                 assistantResponse = assistantResponse.replace('{proposalLink}', context.payload.comment.html_url);
 
+                // remove any double quotes from the final comment because sometimes the assistant's
+                // response contains double quotes / sometimes it doesn't
+                assistantResponse = assistantResponse.replace('"', '');
                 // create a comment with the assistant's response
                 const comment = context.issue({body: assistantResponse});
                 console.log('issue_comment.created - proposal-police posts comment');
@@ -143,8 +149,11 @@ async function handleIssueCommentEdited(context: Context<'issue_comment.edited'>
                             return console.log('issue_comment.edited - assistantResponse is empty');
                         }
         
+                        // check if assistant response is either NO_ACTION or "NO_ACTION" strings
+                        // as sometimes the assistant response varies
+                        const isNoAction = assistantResponse === 'NO_ACTION' || assistantResponse === '"NO_ACTION"';
                         // if assistant response is NO_ACTION or message role is 'user', do nothing
-                        if (assistantResponse === 'NO_ACTION' || threadMessages.data?.[index]?.role === 'user') {
+                        if (isNoAction || threadMessages.data?.[index]?.role === 'user') {
                             if (threadMessages.data?.[index]?.role === 'user')  {
                                 return;
                             }
@@ -153,23 +162,23 @@ async function handleIssueCommentEdited(context: Context<'issue_comment.edited'>
         
                         // edit comment if assistant detected substantial changes and if the comment was not edited already by the bot
                         if (assistantResponse.includes('[EDIT_COMMENT]') && !context.payload.comment.body.includes('Edited by **proposal-police**')) {
-                        // extract the text after [EDIT_COMMENT] from assistantResponse since this is a
-                        // bot related action keyword
-                        let extractedNotice = assistantResponse.split('[EDIT_COMMENT] ')?.[1]?.replace('"', '');
-                        // format the github's created_at like: 2024-01-24 13:15:24 UTC not 2024-01-28 18:18:28.000 UTC
-                        const date = new Date(context.payload.comment.created_at);
-                        const formattedDate = date.toISOString()?.split('.')?.[0]?.replace('T', ' ') + ' UTC';
-                        extractedNotice = extractedNotice.replace('{added_timestamp}', formattedDate);
-                        
-                        const editComment = context.issue({
-                            repo: context.payload.repository.name,
-                            owner: context.payload.repository.owner.login,
-                            comment_id: context.payload.comment.id,
-                            body: `${extractedNotice}\n\n` + context.payload.comment.body,
-                        });
-        
-                        console.log(`issue_comment.edited - proposal-police edits comment: ${context.payload.comment.id}`);
-                        return context.octokit.issues.updateComment(editComment);
+                            // extract the text after [EDIT_COMMENT] from assistantResponse since this is a
+                            // bot related action keyword
+                            let extractedNotice = assistantResponse.split('[EDIT_COMMENT] ')?.[1]?.replace('"', '');
+                            // format the github's created_at like: 2024-01-24 13:15:24 UTC not 2024-01-28 18:18:28.000 UTC
+                            const date = new Date(context.payload.comment.created_at);
+                            const formattedDate = date.toISOString()?.split('.')?.[0]?.replace('T', ' ') + ' UTC';
+                            extractedNotice = extractedNotice.replace('{added_timestamp}', formattedDate);
+                            
+                            const editComment = context.issue({
+                                repo: context.payload.repository.name,
+                                owner: context.payload.repository.owner.login,
+                                comment_id: context.payload.comment.id,
+                                body: `${extractedNotice}\n\n` + context.payload.comment.body,
+                            });
+            
+                            console.log(`issue_comment.edited - proposal-police edits comment: ${context.payload.comment.id}`);
+                            return context.octokit.issues.updateComment(editComment);
                         }
         
                         return false;
